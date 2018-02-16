@@ -50,6 +50,7 @@ library
   Network.Data.OpenFlow.MessagesBinary
   Network.Data.OpenFlow
 
+  Network.Data.OF13.Handlers
   Network.Data.OF13.Message
   Network.Data.OF13.Server
 
