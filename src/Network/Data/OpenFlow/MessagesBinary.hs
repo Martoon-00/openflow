@@ -1,9 +1,13 @@
-{-# LANGUAGE CPP, DisambiguateRecordFields, RecordWildCards, NamedFieldPuns #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE BangPatterns             #-}
+{-# LANGUAGE CPP                      #-}
+{-# LANGUAGE DeriveAnyClass           #-}
+{-# LANGUAGE DeriveGeneric            #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns           #-}
+{-# LANGUAGE RecordWildCards          #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
--- | This module implements parsing and unparsing functions for 
+-- | This module implements parsing and unparsing functions for
 -- OpenFlow messages. It exports a driver that can be used to read messages
 -- from a file handle and write messages to a handle.
 module Network.Data.OpenFlow.MessagesBinary
@@ -14,34 +18,33 @@ module Network.Data.OpenFlow.MessagesBinary
        , putSCMessage
        ) where
 
-import Prelude hiding (mconcat)
-import Network.Data.Ethernet.EthernetAddress
-import Network.Data.Ethernet.EthernetFrame
-import Network.Data.IPv4.IPAddress
-import qualified Network.Data.OpenFlow.Messages as M
-import Network.Data.OpenFlow.Port
-import Network.Data.OpenFlow.Action
-import Network.Data.OpenFlow.Switch
-import Network.Data.OpenFlow.Match
-import Network.Data.OpenFlow.Packet
-import Network.Data.OpenFlow.FlowTable
-import Network.Data.OpenFlow.Statistics
-import Network.Data.OpenFlow.Error
-import Control.Monad (when)
-import Data.Word
-import Data.Bits
-import Data.Binary
-import Data.Binary.Put
-import Data.Binary.Get
-import qualified Data.ByteString as B
-import Data.List as List
-import Data.Char (chr)
-import qualified Data.Map as Map
-import Data.Bimap (Bimap, (!), (!>))
-import qualified Data.Bimap as Bimap
-import Data.Char (ord)
-import Control.DeepSeq (NFData)
-import GHC.Generics (Generic)
+import           Control.DeepSeq                       (NFData)
+import           Control.Monad                         (when)
+import           Data.Bimap                            (Bimap, (!), (!>))
+import qualified Data.Bimap                            as Bimap
+import           Data.Binary
+import           Data.Binary.Get
+import           Data.Binary.Put
+import           Data.Bits
+import qualified Data.ByteString                       as B
+import           Data.Char                             (chr)
+import           Data.Char                             (ord)
+import           Data.List                             as List
+import qualified Data.Map                              as Map
+import           GHC.Generics                          (Generic)
+import           Network.Data.Ethernet.EthernetAddress
+import           Network.Data.Ethernet.EthernetFrame
+import           Network.Data.IPv4.IPAddress
+import           Network.Data.OpenFlow.Action
+import           Network.Data.OpenFlow.Error
+import           Network.Data.OpenFlow.FlowTable
+import           Network.Data.OpenFlow.Match
+import qualified Network.Data.OpenFlow.Messages        as M
+import           Network.Data.OpenFlow.Packet
+import           Network.Data.OpenFlow.Port
+import           Network.Data.OpenFlow.Statistics
+import           Network.Data.OpenFlow.Switch
+import           Prelude                               hiding (mconcat)
 
 
 
@@ -52,10 +55,14 @@ instance Binary M.SCMessage where
 instance Binary M.CSMessage where
   put = putCSMessage
   get = getCSMessage
-          
+
+instance Binary Action where
+  put = putAction
+  get = getAction
+
 type MessageTypeCode = Word8
 
-ofptHello :: MessageTypeCode    
+ofptHello :: MessageTypeCode
 ofptHello                 = 0
 
 ofptError :: MessageTypeCode
@@ -92,7 +99,7 @@ ofptFlowRemoved :: MessageTypeCode
 ofptFlowRemoved           = 11
 
 ofptPortStatus :: MessageTypeCode
-ofptPortStatus            = 12   
+ofptPortStatus            = 12
 
 ofptPacketOut :: MessageTypeCode
 ofptPacketOut             = 13
@@ -123,7 +130,7 @@ ofptQueueGetConfigReply   = 21
 
 -- | Parser for @SCMessage@s
 getSCMessage :: Get M.SCMessage
-getSCMessage 
+getSCMessage
   = do hdr <- getHeader
        bdy <- getSCMessageBody (msgTransactionID hdr) (msgType hdr) (fromIntegral $ msgLength hdr)
        return bdy
@@ -135,9 +142,9 @@ getCSMessage = do hdr <- getHeader
 
 
 -- | Unparser for @SCMessage@s
-putSCMessage :: M.SCMessage -> Put 
-putSCMessage msg = 
-  case msg of 
+putSCMessage :: M.SCMessage -> Put
+putSCMessage msg =
+  case msg of
     M.SCHello xid -> putH xid ofptHello headerSize
 
     M.SCEchoRequest xid bytes -> putH xid ofptEchoRequest (headerSize + length bytes)  <>
@@ -153,13 +160,13 @@ putSCMessage msg =
                                  putSwitchError err
     _ -> error ("serialization for message " ++ show msg ++ " is not yet supported.")
   where vid      = ofpVersion
-        putH xid tcode len = putHeader (OFPHeader vid tcode (fromIntegral len) xid) 
+        putH xid tcode len = putHeader (OFPHeader vid tcode (fromIntegral len) xid)
 
 packetInMessageBodyLen :: PacketInfo -> Int
 packetInMessageBodyLen pktInfo = 10 + fromIntegral (packetLength pktInfo)
 
 putPacketInRecord :: PacketInfo -> Put
-putPacketInRecord (PacketInfo {..}) = 
+putPacketInRecord (PacketInfo {..}) =
   putWord32be (maybe 0xffffffff id bufferID)  <>
   (putWord16be $ fromIntegral packetLength ) <>
   putWord16be receivedOnPort <>
@@ -175,15 +182,15 @@ ofpVersion :: OpenFlowVersionID
 ofpVersion =  0x01
 
 -- | OpenFlow message header
-data OFPHeader = 
+data OFPHeader =
   OFPHeader { msgVersion       :: !OpenFlowVersionID
-            , msgType          :: !MessageTypeCode 
-            , msgLength        :: !Word16 
-            , msgTransactionID :: !M.TransactionID 
+            , msgType          :: !MessageTypeCode
+            , msgLength        :: !Word16
+            , msgTransactionID :: !M.TransactionID
             } deriving (Show,Eq,Generic,NFData)
 
 headerSize :: Int
-headerSize = 8 
+headerSize = 8
 
 -- | Unparser for OpenFlow message header
 putHeader :: OFPHeader -> Put
@@ -191,28 +198,28 @@ putHeader (OFPHeader {..}) = putWord8 msgVersion <>
                              putWord8 msgType  <>
                              putWord16be msgLength <>
                              putWord32be msgTransactionID
-                   
+
 putHeaderInternal :: MessageTypeCode -> Word16 -> M.TransactionID -> Put
-putHeaderInternal !t !l !x 
+putHeaderInternal !t !l !x
   = putWord8 ofpVersion <>
     putWord8 t <>
     putWord16be l <>
     putWord32be x
 {-# INLINE putHeaderInternal #-}
 
--- | Parser for the OpenFlow message header                          
+-- | Parser for the OpenFlow message header
 getHeader :: Get OFPHeader
 getHeader = do v <- getWord8
                t <- getWord8
                l <- getWord16be
                x <- getWord32be
                return $ OFPHeader v t l x
-{-# INLINE getHeader #-} 
-               
+{-# INLINE getHeader #-}
+
 -- Get SCMessage body
-{-# INLINE getSCMessageBody #-} 
+{-# INLINE getSCMessageBody #-}
 getSCMessageBody :: M.TransactionID -> MessageTypeCode -> Int -> Get M.SCMessage
-getSCMessageBody !xid !msgType !len 
+getSCMessageBody !xid !msgType !len
   | msgType == ofptPacketIn      = do packetInRecord <- getPacketInRecord len
                                       return (M.PacketIn xid packetInRecord)
   | msgType == ofptEchoRequest   = do bytes <- getWord8s (len - headerSize)
@@ -222,13 +229,13 @@ getSCMessageBody !xid !msgType !len
   | msgType == ofptFeaturesReply = do switchFeaturesRecord <- getSwitchFeaturesRecord len
                                       return (M.Features xid switchFeaturesRecord)
   | msgType == ofptHello         = return (M.SCHello xid )
-  | msgType == ofptPortStatus    = do body <- getPortStatus 
+  | msgType == ofptPortStatus    = do body <- getPortStatus
                                       return (M.PortStatus xid body)
   | msgType == ofptError         = do body <- getSwitchError len
                                       return (M.Error xid body)
-  | msgType == ofptFlowRemoved   = do body <- getFlowRemovedRecord 
+  | msgType == ofptFlowRemoved   = do body <- getFlowRemovedRecord
                                       return (M.FlowRemoved xid body)
-  | msgType == ofptBarrierReply  = return $ M.BarrierReply xid 
+  | msgType == ofptBarrierReply  = return $ M.BarrierReply xid
   | msgType == ofptStatsReply    = do body <- getStatsReply len
                                       return (M.StatsReply xid body)
   | msgType == ofptQueueGetConfigReply = do qcReply <- getQueueConfigReply len
@@ -238,14 +245,14 @@ getSCMessageBody !xid !msgType !len
 
 
 getCSMessageBody :: OFPHeader -> Get (M.TransactionID, M.CSMessage)
-getCSMessageBody header@(OFPHeader {..}) = 
-    if msgType == ofptPacketOut 
+getCSMessageBody header@(OFPHeader {..}) =
+    if msgType == ofptPacketOut
     then do packetOut <- getPacketOut len
             return (msgTransactionID, M.PacketOut msgTransactionID packetOut)
     else if msgType == ofptFlowMod
          then do fmod <- getFlowMod len
                  return (msgTransactionID, M.FlowMod msgTransactionID fmod)
-         else if msgType == ofptHello 
+         else if msgType == ofptHello
               then return (msgTransactionID, M.CSHello msgTransactionID)
               else if msgType == ofptEchoRequest
                    then do bytes <- getWord8s (len - headerSize)
@@ -256,9 +263,9 @@ getCSMessageBody header@(OFPHeader {..}) =
                         else if msgType == ofptFeaturesRequest
                              then return (msgTransactionID, M.FeaturesRequest msgTransactionID)
                              else if msgType == ofptSetConfig
-                                  then do _ <- getSetConfig 
+                                  then do _ <- getSetConfig
                                           return (msgTransactionID, M.SetConfig msgTransactionID)
-                                  else if msgType == ofptVendor 
+                                  else if msgType == ofptVendor
                                        then do () <- getVendorMessage len
                                                return (msgTransactionID, M.Vendor msgTransactionID)
                                        else error ("Unrecognized message type with header: " ++ show header)
@@ -268,65 +275,65 @@ getCSMessageBody header@(OFPHeader {..}) =
 -- Queue Config parser
 -----------------------
 getQueueConfigReply :: Int -> Get QueueConfigReply
-getQueueConfigReply len = 
-  do portID <- getWord16be 
+getQueueConfigReply len =
+  do portID <- getWord16be
      skip 6
      qs <- getQueues 16 []
      return (PortQueueConfig portID qs)
-  where 
-    getQueues pos acc = 
+  where
+    getQueues pos acc =
       if pos < len
       then do (q, n) <- getQueue
               let pos' = pos + n
               pos' `seq` getQueues pos' (q:acc)
       else return acc
-    getQueue = 
-      do qid <- getWord32be 
+    getQueue =
+      do qid <- getWord32be
          qdlen <- getWord16be
          skip 2
          qprops <- getQueueProps qdlen 8 [] -- at byte 8 because of ofp_packet_queue header and len includes header (my guess).
          return (QueueConfig qid qprops, fromIntegral qdlen)
-      where 
-        getQueueProps qdlen pos acc = 
+      where
+        getQueueProps qdlen pos acc =
           if pos < qdlen
           then do (prop, propLen) <- getQueueProp
                   let pos' = pos + propLen
                   pos' `seq` getQueueProps qdlen pos' (prop : acc)
           else return acc
-        getQueueProp = 
+        getQueueProp =
           do propType <- getWord16be
-             propLen  <- getWord16be 
+             propLen  <- getWord16be
              skip 4
              when (propType /= ofpqtMinRate) (error ("Unexpected queue property type code " ++ show propType))
              rate <- getWord16be
              skip 6
              let rate' = if rate  > 1000 then Disabled else Enabled rate
              return (MinRateQueue rate', propLen)
-                          
-                          
-ofpqtMinRate :: Word16                          
+
+
+ofpqtMinRate :: Word16
 ofpqtMinRate = 1
 ----------------------
 -- Set Config parser
 ----------------------
-getSetConfig :: Get (Word16, Word16)          
+getSetConfig :: Get (Word16, Word16)
 getSetConfig = do flags <- getWord16be
                   missSendLen <- getWord16be
                   return (flags, missSendLen)
-          
--------------------------------------------               
--- Vendor parser               
--------------------------------------------                  
-getVendorMessage :: Int -> Get ()                  
+
+-------------------------------------------
+-- Vendor parser
+-------------------------------------------
+getVendorMessage :: Int -> Get ()
 getVendorMessage r
   = do skip r
        return ()
-               
+
 -------------------------------------------
---  SWITCH FEATURES PARSER 
+--  SWITCH FEATURES PARSER
 -------------------------------------------
 putSwitchFeaturesRecord :: SwitchFeatures -> Put
-putSwitchFeaturesRecord (SwitchFeatures {..}) = 
+putSwitchFeaturesRecord (SwitchFeatures {..}) =
   putWord64be switchID <>
   (putWord32be $ fromIntegral packetBufferSize) <>
   (putWord8 $ fromIntegral numberFlowTables) <>
@@ -336,7 +343,7 @@ putSwitchFeaturesRecord (SwitchFeatures {..}) =
   mconcat [ putPhyPort p | p <- ports ]
 
 getSwitchFeaturesRecord :: Int -> Get SwitchFeatures
-getSwitchFeaturesRecord len = do 
+getSwitchFeaturesRecord len = do
   dpid    <- getWord64be
   nbufs   <- getWord32be
   ntables <- getWord8
@@ -356,7 +363,7 @@ getSwitchFeaturesRecord len = do
           size_ofp_phy_port = 48
 
 putPhyPort :: Port -> Put
-putPhyPort (Port {..}) = 
+putPhyPort (Port {..}) =
   putWord16be portID <>
   putEthernetAddress portAddress <>
   (putWord8s $ take ofpMaxPortNameLen (map (fromIntegral . ord) portName ++ repeat 0)) <>
@@ -366,10 +373,10 @@ putPhyPort (Port {..}) =
   (putWord32be $ featuresBitVector $ maybe [] id portAdvertisedFeatures) <>
   (putWord32be $ featuresBitVector $ maybe [] id portSupportedFeatures) <>
   (putWord32be $ featuresBitVector $ maybe [] id portPeerFeatures)
-     
+
 
 getPhyPort :: Get Port
-getPhyPort = do 
+getPhyPort = do
   port_no  <- getWord16be
   hw_addr  <- getEthernetAddress
   name_arr <- getWord8s ofpMaxPortNameLen
@@ -378,16 +385,16 @@ getPhyPort = do
   st   <- getWord32be
   let (linkDown, stpState) = code2PortState st
   curr <- getWord32be
-  adv  <- getWord32be 
+  adv  <- getWord32be
   supp <- getWord32be
   peer <- getWord32be
-  return $ Port { portID                 = port_no, 
-                  portName               = port_name, 
-                  portAddress            = hw_addr, 
-                  portConfig             = bitMap2PortConfigAttributeSet cfg, 
-                  portLinkDown           = linkDown, 
-                  portSTPState           = stpState, 
-                  portCurrentFeatures    = decodePortFeatureSet curr, 
+  return $ Port { portID                 = port_no,
+                  portName               = port_name,
+                  portAddress            = hw_addr,
+                  portConfig             = bitMap2PortConfigAttributeSet cfg,
+                  portLinkDown           = linkDown,
+                  portSTPState           = stpState,
+                  portCurrentFeatures    = decodePortFeatureSet curr,
                   portAdvertisedFeatures = decodePortFeatureSet adv,
                   portSupportedFeatures  = decodePortFeatureSet supp,
                   portPeerFeatures       = decodePortFeatureSet peer
@@ -400,20 +407,20 @@ featuresBitVector :: [PortFeature] -> Word32
 featuresBitVector = foldl (\v f -> v .|. featureBitMask f) 0
 
 featureBitMask :: PortFeature -> Word32
-featureBitMask feat = 
-  case lookup feat featurePositions of 
+featureBitMask feat =
+  case lookup feat featurePositions of
     Nothing -> error "unexpected port feature"
-    Just i -> bit i
+    Just i  -> bit i
 
 decodePortFeatureSet :: Word32 -> Maybe [PortFeature]
-decodePortFeatureSet word 
+decodePortFeatureSet word
     | word == 0 = Nothing
     | otherwise = Just $ concat [ if word `testBit` position then [feat] else [] | (feat, position) <- featurePositions ]
 
 featurePositions :: [(PortFeature, Int)]
 featurePositions = [ (Rate10MbHD,       0),
-                     (Rate10MbFD,       1), 
-                     (Rate100MbHD,      2), 
+                     (Rate10MbFD,       1),
+                     (Rate100MbHD,      2),
                      (Rate100MbFD,      3),
                      (Rate1GbHD,        4),
                      (Rate1GbFD,        5),
@@ -429,12 +436,12 @@ ofppsLinkDown   = 1 `shiftL` 0  -- 1 << 0
 ofppsStpListen  = 0 `shiftL` 8  -- 0 << 8
 ofppsStpLearn   = 1 `shiftL` 8  -- 1 << 8
 ofppsStpForward = 2 `shiftL` 8  -- 2 << 8
-ofppsStpBlock   = 3 `shiftL` 8  -- 3 << 8 
+ofppsStpBlock   = 3 `shiftL` 8  -- 3 << 8
 ofppsStpMask    = 3 `shiftL` 8  -- 3 << 8
 
 code2PortState :: Word32 -> (Bool, SpanningTreePortState)
 code2PortState w = (w .&. ofppsLinkDown /= 0, stpState)
-    where stpState 
+    where stpState
               | flag == ofppsStpListen  = STPListening
               | flag == ofppsStpLearn   = STPLearning
               | flag == ofppsStpForward = STPForwarding
@@ -443,7 +450,7 @@ code2PortState w = (w .&. ofppsLinkDown /= 0, stpState)
           flag = w .&. ofppsStpMask
 
 portState2Code :: Bool -> SpanningTreePortState -> Word32
-portState2Code isUp stpState = 
+portState2Code isUp stpState =
   let b1 = if isUp then ofppsLinkDown else 0
       b2 = case stpState of
         STPListening  -> ofppsStpListen
@@ -451,10 +458,10 @@ portState2Code isUp stpState =
         STPForwarding -> ofppsStpForward
         STPBlocking   -> ofppsStpBlock
   in b1 .|. b2
-     
+
 bitMap2PortConfigAttributeSet :: Word32 -> [PortConfigAttribute]
 bitMap2PortConfigAttributeSet bmap = filter inBMap $ enumFrom $ toEnum 0
-    where inBMap attr = let mask = portAttribute2BitMask attr 
+    where inBMap attr = let mask = portAttribute2BitMask attr
                         in mask .&. bmap == mask
 
 portConfigsBitVector :: [PortConfigAttribute] -> Word32
@@ -476,7 +483,7 @@ portAttributeSet2BitMask = foldl f 0
 bitMap2SwitchCapabilitySet :: Word32 -> [SwitchCapability]
 bitMap2SwitchCapabilitySet bmap =
   filter inBMap capList
-    where inBMap attr = let mask = switchCapability2BitMask attr 
+    where inBMap attr = let mask = switchCapability2BitMask attr
                         in mask .&. bmap == mask
           capList = [ HasFlowStats
                     , HasTableStats
@@ -488,7 +495,7 @@ bitMap2SwitchCapabilitySet bmap =
                     ]
 
 switchCapabilitiesBitVector :: [SwitchCapability] -> Word32
-switchCapabilitiesBitVector = 
+switchCapabilitiesBitVector =
   foldl (\vector c -> vector .|. switchCapability2BitMask c) 0
 
 switchCapability2BitMask :: SwitchCapability -> Word32
@@ -505,58 +512,58 @@ switchCapability2BitMask MayTransmitOverMultiplePhysicalInterfaces =
 
 bitMap2SwitchActionSet :: Word32 -> [ActionType]
 bitMap2SwitchActionSet bmap = filter inBMap $ enumFrom $ toEnum 0
-    where inBMap attr = let mask = actionType2BitMask attr 
+    where inBMap attr = let mask = actionType2BitMask attr
                         in mask .&. bmap == mask
 
 actionTypesBitVector :: [ActionType] -> Word32
 actionTypesBitVector = foldl (\v a -> v .|. actionType2BitMask a) 0
 
 code2ActionType :: Word16 -> ActionType
-code2ActionType !code = 
+code2ActionType !code =
   case code of
-    0 -> OutputToPortType
-    1 -> SetVlanVIDType
-    2 -> SetVlanPriorityType
-    3 -> StripVlanHeaderType
-    4 -> SetEthSrcAddrType
-    5 -> SetEthDstAddrType
-    6 -> SetIPSrcAddrType
-    7 -> SetIPDstAddrType
-    8 -> SetIPTypeOfServiceType
-    9 -> SetTransportSrcPortType
-    10 -> SetTransportDstPortType
-    11 -> EnqueueType
+    0      -> OutputToPortType
+    1      -> SetVlanVIDType
+    2      -> SetVlanPriorityType
+    3      -> StripVlanHeaderType
+    4      -> SetEthSrcAddrType
+    5      -> SetEthDstAddrType
+    6      -> SetIPSrcAddrType
+    7      -> SetIPDstAddrType
+    8      -> SetIPTypeOfServiceType
+    9      -> SetTransportSrcPortType
+    10     -> SetTransportDstPortType
+    11     -> EnqueueType
     0xffff -> VendorActionType
-    _ -> error "Unknown action type code"
+    _      -> error "Unknown action type code"
 {-# INLINE code2ActionType #-}
 
 actionType2Code :: ActionType -> Word16
-actionType2Code OutputToPortType = 0
-actionType2Code SetVlanVIDType = 1
-actionType2Code SetVlanPriorityType = 2
-actionType2Code StripVlanHeaderType = 3
-actionType2Code SetEthSrcAddrType = 4
-actionType2Code SetEthDstAddrType = 5
-actionType2Code SetIPSrcAddrType = 6
-actionType2Code SetIPDstAddrType = 7
-actionType2Code SetIPTypeOfServiceType = 8
+actionType2Code OutputToPortType        = 0
+actionType2Code SetVlanVIDType          = 1
+actionType2Code SetVlanPriorityType     = 2
+actionType2Code StripVlanHeaderType     = 3
+actionType2Code SetEthSrcAddrType       = 4
+actionType2Code SetEthDstAddrType       = 5
+actionType2Code SetIPSrcAddrType        = 6
+actionType2Code SetIPDstAddrType        = 7
+actionType2Code SetIPTypeOfServiceType  = 8
 actionType2Code SetTransportSrcPortType = 9
 actionType2Code SetTransportDstPortType = 10
-actionType2Code EnqueueType = 11
-actionType2Code VendorActionType = 0xffff
-{-# INLINE actionType2Code #-}  
+actionType2Code EnqueueType             = 11
+actionType2Code VendorActionType        = 0xffff
+{-# INLINE actionType2Code #-}
 
 
 
 actionType2BitMask :: ActionType -> Word32
-actionType2BitMask = shiftL 1 . fromIntegral . actionType2Code 
+actionType2BitMask = shiftL 1 . fromIntegral . actionType2Code
 
 ------------------------------------------
 -- Packet In Parser
 ------------------------------------------
-{-# INLINE getPacketInRecord #-} 
+{-# INLINE getPacketInRecord #-}
 getPacketInRecord :: Int -> Get PacketInfo
-getPacketInRecord len = do 
+getPacketInRecord len = do
   bufID      <- getWord32be
   totalLen   <- getWord16be
   in_port    <- getWord16be
@@ -578,7 +585,7 @@ getPacketInRecord len = do
 
 {-# INLINE code2Reason #-}
 code2Reason :: Word8 -> PacketInReason
-code2Reason !code 
+code2Reason !code
   | code == 0  = NotMatched
   | code == 1  = ExplicitSend
   | otherwise  = error ("Received unknown packet-in reason code: " ++ show code ++ ".")
@@ -588,14 +595,14 @@ reason2Code :: PacketInReason -> Word8
 reason2Code NotMatched   = 0
 reason2Code ExplicitSend = 1
 
-  
+
 
 
 ------------------------------------------
 -- Port Status parser
 ------------------------------------------
 getPortStatus :: Get PortStatus
-getPortStatus = do 
+getPortStatus = do
   reasonCode <- getWord8
   skip 7
   portDesc <- getPhyPort
@@ -613,14 +620,14 @@ code2PortStatusUpdateReason code
 -- Switch Error parser
 ------------------------------------------
 getSwitchError :: Int -> Get SwitchError
-getSwitchError len = do 
+getSwitchError len = do
   typ   <- getWord16be
   code  <- getWord16be
   bytes <- getWord8s (len - headerSize - 4)
   return (code2ErrorType typ code bytes)
 
 putSwitchError :: SwitchError -> Put
-putSwitchError (BadRequest VendorNotSupported []) = 
+putSwitchError (BadRequest VendorNotSupported []) =
   putWord16be 1 <>
   putWord16be 3
 putSwitchError err = error ("Serialization for error " ++ show err ++ " not yet supported.")
@@ -638,40 +645,40 @@ code2ErrorType typ code bytes
 
 helloErrorCodesMap :: Bimap Word16 HelloFailure
 helloErrorCodesMap = Bimap.fromList [ (0, IncompatibleVersions)
-                                      , (1       , HelloPermissionsError) 
+                                      , (1       , HelloPermissionsError)
                                       ]
 
 requestErrorCodeMap :: Bimap Word16 RequestError
-requestErrorCodeMap = Bimap.fromList [ (0,    VersionNotSupported),                  
-                                       (1   ,    MessageTypeNotSupported), 
-                                       (2   ,    StatsRequestTypeNotSupported), 
-                                       (3 ,    VendorNotSupported), 
+requestErrorCodeMap = Bimap.fromList [ (0,    VersionNotSupported),
+                                       (1   ,    MessageTypeNotSupported),
+                                       (2   ,    StatsRequestTypeNotSupported),
+                                       (3 ,    VendorNotSupported),
                                        (4,    VendorSubtypeNotSupported)
                                        , (5      ,    RequestPermissionsError)
                                        , (6    ,    BadRequestLength)
                                        , (7,   BufferEmpty)
-                                       , (8, UnknownBuffer) 
+                                       , (8, UnknownBuffer)
                                        ]
 
 actionErrorCodeMap :: Bimap Word16 ActionError
-actionErrorCodeMap = Bimap.fromList [ (0, UnknownActionType), 
-                                      (1, BadActionLength), 
-                                      (2, UnknownVendorID), 
-                                      (3, UnknownActionTypeForVendor), 
-                                      (4, BadOutPort), 
+actionErrorCodeMap = Bimap.fromList [ (0, UnknownActionType),
+                                      (1, BadActionLength),
+                                      (2, UnknownVendorID),
+                                      (3, UnknownActionTypeForVendor),
+                                      (4, BadOutPort),
                                       (5, BadActionArgument)
                                       , (6, ActionPermissionsError)
                                       , (7, TooManyActions)
-                                      , (8, InvalidQueue) 
+                                      , (8, InvalidQueue)
                                       ]
 
-flowModErrorCodeMap :: Bimap Word16 FlowModError                 
-flowModErrorCodeMap = Bimap.fromList [ (0,   TablesFull) 
+flowModErrorCodeMap :: Bimap Word16 FlowModError
+flowModErrorCodeMap = Bimap.fromList [ (0,   TablesFull)
                                        , (1,           OverlappingFlow)
                                        , (2,             FlowModPermissionsError)
                                        , (3, EmergencyModHasTimeouts)
                                        , (4,       BadCommand)
-                                       , (5,       UnsupportedActionList) 
+                                       , (5,       UnsupportedActionList)
                                        ]
 
 
@@ -679,16 +686,16 @@ flowModErrorCodeMap = Bimap.fromList [ (0,   TablesFull)
 -- FlowRemoved parser
 ------------------------------------------
 getFlowRemovedRecord :: Get FlowRemoved
-getFlowRemovedRecord = do 
+getFlowRemovedRecord = do
   m         <- getMatch
   cookie <- getWord64be
   p         <- getWord16be
   rcode     <- getWord8
-  skip 1 
+  skip 1
   dur       <- getWord32be
   dur_nsec <-  getWord32be
   idle_timeout <- getWord16be
-  skip 2 
+  skip 2
   pktCount  <- getWord64be
   byteCount <- getWord64be
   return $ FlowRemovedRecord m cookie p (code2FlowRemovalReason rcode) (fromIntegral dur) (fromIntegral dur_nsec) (fromIntegral idle_timeout) (fromIntegral pktCount) (fromIntegral byteCount)
@@ -696,8 +703,8 @@ getFlowRemovedRecord = do
 
 flowRemovalReason2CodeBijection :: Bimap FlowRemovalReason Word8
 flowRemovalReason2CodeBijection =
-    Bimap.fromList [(IdleTimerExpired,    0), 
-                    (HardTimerExpired,    1), 
+    Bimap.fromList [(IdleTimerExpired,    0),
+                    (HardTimerExpired,    1),
                     (DeletedByController, 2)        ]
 
 code2FlowRemovalReason :: Word8 -> FlowRemovalReason
@@ -709,50 +716,50 @@ code2FlowRemovalReason rcode = (Bimap.!>) flowRemovalReason2CodeBijection rcode
 -----------------------------------------
 
 getStatsReply :: Int -> Get StatsReply
-getStatsReply headerLen = do 
+getStatsReply headerLen = do
   statsType <- getWord16be
   flags     <- getWord16be
   let bodyLen = headerLen - (headerSize + 4)
   let moreFlag = flags == 0x0001
   if statsType == ofpstFlow
-   then do flowStats    <- getFlowStatsReplies bodyLen 
+   then do flowStats    <- getFlowStatsReplies bodyLen
            return (FlowStatsReply moreFlag flowStats)
    else if statsType == ofpstPort
          then do portStats <- getPortStatsReplies bodyLen
                  return (PortStatsReply moreFlag portStats)
-         else if statsType == ofpstAggregate 
+         else if statsType == ofpstAggregate
               then do aggStats <- getAggregateStatsReplies bodyLen
                       return (AggregateFlowStatsReply aggStats)
-              else if statsType == ofpstTable 
+              else if statsType == ofpstTable
                    then do tableStats <- getTableStatsReplies bodyLen
                            return (TableStatsReply moreFlag tableStats)
-                   else if statsType == ofpstDesc 
+                   else if statsType == ofpstDesc
                         then do desc <- getDescriptionReply
                                 return (DescriptionReply desc)
-                        else 
-                          if statsType == ofpstQueue 
-                          then do queueStats <- getQueueStatsReplies bodyLen 
+                        else
+                          if statsType == ofpstQueue
+                          then do queueStats <- getQueueStatsReplies bodyLen
                                   return (QueueStatsReply moreFlag queueStats)
-                          else 
+                          else
                             error ("unhandled stats reply message with type: " ++ show statsType)
 
 
 getQueueStatsReplies :: Int -> Get [QueueStats]
-getQueueStatsReplies bodyLen = do 
+getQueueStatsReplies bodyLen = do
   sequence (replicate cnt getQueueStatsReply)
   where cnt = let (d,m) = bodyLen `divMod` queueStatsLength
-              in if m == 0 
+              in if m == 0
                  then d
                  else error ("Body of queue stats reply must be a multiple of " ++ show queueStatsLength)
         queueStatsLength = 32
-        getQueueStatsReply = do 
+        getQueueStatsReply = do
           portNo     <- getWord16be
           skip 2
           qid        <- getWord32be
           tx_bytes   <- getWord64be
           tx_packets <- getWord64be
           tx_errs    <- getWord64be
-          return (QueueStats { queueStatsPortID             = portNo, 
+          return (QueueStats { queueStatsPortID             = portNo,
                                queueStatsQueueID            = qid,
                                queueStatsTransmittedBytes   = fromIntegral tx_bytes,
                                queueStatsTransmittedPackets = fromIntegral tx_packets,
@@ -760,7 +767,7 @@ getQueueStatsReplies bodyLen = do
 
 
 getDescriptionReply :: Get Description
-getDescriptionReply = do 
+getDescriptionReply = do
   mfr    <- getCharsRightPadded descLen
   hw     <- getCharsRightPadded descLen
   sw     <- getCharsRightPadded descLen
@@ -774,22 +781,22 @@ getDescriptionReply = do
   } )
   where descLen      = 256
         serialNumLen =  32
-  
-getCharsRightPadded :: Int -> Get String        
-getCharsRightPadded n = do 
+
+getCharsRightPadded :: Int -> Get String
+getCharsRightPadded n = do
   bytes <- getWord8s n
   return [ chr (fromIntegral b) | b <- takeWhile (/=0) bytes]
-        
+
 getTableStatsReplies :: Int -> Get [TableStats]
 getTableStatsReplies bodyLen = sequence (replicate cnt getTableStatsReply)
   where cnt = let (d,m) = bodyLen `divMod` tableStatsLength
-              in if m == 0 
+              in if m == 0
                  then d
                  else error ("Body of Table stats reply must be a multiple of " ++ show tableStatsLength)
         tableStatsLength = 64
 
 getTableStatsReply :: Get TableStats
-getTableStatsReply = do 
+getTableStatsReply = do
   tableID      <- getWord8
   skip 3
   name_bytes   <- getWord8s maxTableNameLen
@@ -799,20 +806,20 @@ getTableStatsReply = do
   activeCount  <- getWord32be
   lookupCount  <- getWord64be
   matchedCount <- getWord64be
-  return ( TableStats { tableStatsTableID   = tableID, 
-                        tableStatsTableName = name, 
-                        tableStatsMaxEntries = fromIntegral maxEntries, 
-                        tableStatsActiveCount = fromIntegral activeCount, 
-                        tableStatsLookupCount  = fromIntegral lookupCount, 
+  return ( TableStats { tableStatsTableID   = tableID,
+                        tableStatsTableName = name,
+                        tableStatsMaxEntries = fromIntegral maxEntries,
+                        tableStatsActiveCount = fromIntegral activeCount,
+                        tableStatsLookupCount  = fromIntegral lookupCount,
                         tableStatsMatchedCount = fromIntegral matchedCount } )
   where maxTableNameLen = 32
 
 
 getFlowStatsReplies :: Int -> Get [FlowStats]
-getFlowStatsReplies bodyLen 
+getFlowStatsReplies bodyLen
     | bodyLen == 0 = return []
-    | otherwise    = do (fs,fsLen) <- getFlowStatsReply 
-                        rest       <- getFlowStatsReplies (bodyLen - fsLen) 
+    | otherwise    = do (fs,fsLen) <- getFlowStatsReply
+                        rest       <- getFlowStatsReplies (bodyLen - fsLen)
                         return (fs : rest)
 
 getFlowStatsReply :: Get (FlowStats, Int)
@@ -829,23 +836,23 @@ getFlowStatsReply = do !len            <- getWord16be
                        !cookie         <- getWord64be
                        !packet_count   <- getWord64be
                        !byte_count     <- getWord64be
-                       actions <- getActionsOfSize (fromIntegral len - flowStatsReplySize)                          
-                       let !stats = FlowStats { flowStatsTableID             = tid, 
-                                                flowStatsMatch               = match, 
+                       actions <- getActionsOfSize (fromIntegral len - flowStatsReplySize)
+                       let !stats = FlowStats { flowStatsTableID             = tid,
+                                                flowStatsMatch               = match,
                                                 flowStatsDurationSeconds     = fromIntegral dur_sec,
-                                                flowStatsDurationNanoseconds = fromIntegral dur_nanosec, 
-                                                flowStatsPriority            = priority, 
+                                                flowStatsDurationNanoseconds = fromIntegral dur_nanosec,
+                                                flowStatsPriority            = priority,
                                                 flowStatsIdleTimeout         = fromIntegral idle_to,
                                                 flowStatsHardTimeout         = fromIntegral hard_to,
-                                                flowStatsCookie              = cookie, 
-                                                flowStatsPacketCount         = fromIntegral packet_count, 
-                                                flowStatsByteCount           = fromIntegral byte_count, 
+                                                flowStatsCookie              = cookie,
+                                                flowStatsPacketCount         = fromIntegral packet_count,
+                                                flowStatsByteCount           = fromIntegral byte_count,
                                                 flowStatsActions             = actions      }
                        return (stats, fromIntegral len)
     where flowStatsReplySize = 88
 
-getActionsOfSize :: Int -> Get [Action]    
-getActionsOfSize n 
+getActionsOfSize :: Int -> Get [Action]
+getActionsOfSize n
   | n > 0 = do a <- getAction
                as <- getActionsOfSize (n - actionSizeInBytes a)
                return (a : as)
@@ -853,14 +860,14 @@ getActionsOfSize n
   | otherwise = error "bad number of actions or bad action size"
 
 getAction :: Get Action
-getAction = do 
+getAction = do
   action_type <- getWord16be
   action_len  <- getWord16be
   getActionForType (code2ActionType action_type) action_len
 
 getActionForType :: ActionType -> Word16 -> Get Action
-getActionForType OutputToPortType _ = 
-  do port    <- getWord16be 
+getActionForType OutputToPortType _ =
+  do port    <- getWord16be
      max_len <- getWord16be
      return (SendOutPort (action port max_len))
     where action !port !max_len
@@ -871,47 +878,47 @@ getActionForType OutputToPortType _ =
               | port == ofppController  = ToController max_len
               | port == ofppTable       = WithTable
               | otherwise               = error "Unknown pseudo-port code"
-getActionForType SetVlanVIDType _ = 
+getActionForType SetVlanVIDType _ =
   do vlanid <- getWord16be
      skip 2
      return (SetVlanVID vlanid)
-getActionForType SetVlanPriorityType _ = 
+getActionForType SetVlanPriorityType _ =
   do pcp <- getWord8
      skip 3
      return (SetVlanPriority pcp)
-getActionForType StripVlanHeaderType _ = 
+getActionForType StripVlanHeaderType _ =
   do skip 4
      return StripVlanHeader
-getActionForType SetEthSrcAddrType _ = 
+getActionForType SetEthSrcAddrType _ =
   do addr <- getEthernetAddress
      skip 6
      return (SetEthSrcAddr addr)
-getActionForType SetEthDstAddrType _ = 
+getActionForType SetEthDstAddrType _ =
   do addr <- getEthernetAddress
      skip 6
      return (SetEthDstAddr addr)
-getActionForType SetIPSrcAddrType _ = 
+getActionForType SetIPSrcAddrType _ =
   do addr <- getIPAddress
      return (SetIPSrcAddr addr)
-getActionForType SetIPDstAddrType _ = 
+getActionForType SetIPDstAddrType _ =
   do addr <- getIPAddress
      return (SetIPDstAddr addr)
-getActionForType SetIPTypeOfServiceType _ = 
+getActionForType SetIPTypeOfServiceType _ =
   do tos <- getWord8
      skip 3
      return (SetIPToS tos)
-getActionForType SetTransportSrcPortType _ = 
+getActionForType SetTransportSrcPortType _ =
   do port <- getWord16be
      return (SetTransportSrcPort port)
-getActionForType SetTransportDstPortType _ = 
+getActionForType SetTransportDstPortType _ =
   do port <- getWord16be
      return (SetTransportDstPort port)
-getActionForType EnqueueType _ = 
+getActionForType EnqueueType _ =
   do port <- getWord16be
      skip 6
      qid <- getWord32be
      return (Enqueue port qid)
-getActionForType VendorActionType action_len = 
+getActionForType VendorActionType action_len =
   do vendorid <- getWord32be
      bytes <- getWord8s (fromIntegral action_len - 2 - 2 - 4)
      return (VendorAction vendorid bytes)
@@ -919,7 +926,7 @@ getActionForType VendorActionType action_len =
 
 
 getAggregateStatsReplies :: Int -> Get AggregateFlowStats
-getAggregateStatsReplies _ = do 
+getAggregateStatsReplies _ = do
   pkt_cnt <- getWord64be
   byte_cnt <- getWord64be
   flow_cnt <- getWord32be
@@ -946,24 +953,24 @@ getPortStatsReply = do port_no    <- getWord16be
                        rx_over_err <- getWord64be
                        rx_crc_err <- getWord64be
                        collisions <- getWord64be
-                       return $ (port_no, 
-                                 PortStats { 
-                                    portStatsReceivedPackets      = checkValid rx_packets, 
-                                    portStatsSentPackets          = checkValid tx_packets, 
-                                    portStatsReceivedBytes        = checkValid rx_bytes, 
-                                    portStatsSentBytes            = checkValid tx_bytes, 
-                                    portStatsReceiverDropped      = checkValid rx_dropped, 
+                       return $ (port_no,
+                                 PortStats {
+                                    portStatsReceivedPackets      = checkValid rx_packets,
+                                    portStatsSentPackets          = checkValid tx_packets,
+                                    portStatsReceivedBytes        = checkValid rx_bytes,
+                                    portStatsSentBytes            = checkValid tx_bytes,
+                                    portStatsReceiverDropped      = checkValid rx_dropped,
                                     portStatsSenderDropped        = checkValid tx_dropped,
                                     portStatsReceiveErrors        = checkValid rx_errors,
-                                    portStatsTransmitError        = checkValid tx_errors, 
-                                    portStatsReceivedFrameErrors  = checkValid rx_frame_err, 
+                                    portStatsTransmitError        = checkValid tx_errors,
+                                    portStatsReceivedFrameErrors  = checkValid rx_frame_err,
                                     portStatsReceiverOverrunError = checkValid rx_over_err,
                                     portStatsReceiverCRCError     = checkValid rx_crc_err,
                                     portStatsCollisions           = checkValid collisions }
                                  )
     where checkValid :: Word64 -> Maybe Double
-          checkValid x = if x == -1 
-                         then Nothing 
+          checkValid x = if x == -1
+                         then Nothing
                          else Just (fromIntegral x)
 
 
@@ -972,15 +979,15 @@ getPortStatsReply = do port_no    <- getWord16be
 ----------------------------------------------
 
 putCSMessage :: M.CSMessage -> Put
-putCSMessage !msg = 
-    case msg of 
+putCSMessage !msg =
+    case msg of
       M.FlowMod xid fmod -> putFlowModMain xid fmod
       M.PacketOut xid packetOut -> putSendPacket xid packetOut
       M.CSHello xid -> putH xid ofptHello headerSize
       M.CSEchoRequest xid bytes -> putH xid ofptEchoRequest (headerSize + length bytes)  <>
                                    putWord8s bytes
       M.CSEchoReply xid bytes   -> putEchoReply xid bytes
-      M.FeaturesRequest xid -> putFeatureRequest xid 
+      M.FeaturesRequest xid -> putFeatureRequest xid
       M.PortMod xid portModRecord -> putH xid ofptPortMod portModLength <>
                                      putPortMod portModRecord
       M.BarrierRequest xid         -> putBarrierRequest xid
@@ -993,15 +1000,15 @@ putCSMessage !msg =
       _ -> error ("Serialization of message " ++ show msg ++ " not yet supported.")
     where vid      = ofpVersion
           putH :: M.TransactionID -> MessageTypeCode -> Int -> Put
-          putH xid tcode len = putHeader (OFPHeader vid tcode (fromIntegral len) xid) 
+          putH xid tcode len = putHeader (OFPHeader vid tcode (fromIntegral len) xid)
 {-# INLINE putCSMessage #-}
 
 putBarrierRequest :: M.TransactionID -> Put
-putBarrierRequest xid = 
+putBarrierRequest xid =
   putHeaderInternal ofptBarrierRequest (fromIntegral headerSize) xid
 
 putFeatureRequest :: M.TransactionID -> Put
-putFeatureRequest xid = 
+putFeatureRequest xid =
   putHeaderInternal ofptFeaturesRequest (fromIntegral headerSize) xid
 
 putEchoReply :: M.TransactionID -> [Word8] -> Put
@@ -1011,7 +1018,7 @@ putEchoReply xid bytes =
 
 
 putQueueConfigRequest :: QueueConfigRequest -> Put
-putQueueConfigRequest (QueueConfigRequest portID) = 
+putQueueConfigRequest (QueueConfigRequest portID) =
   putWord16be portID <>
   putWord16be 0 --padding
 
@@ -1037,7 +1044,7 @@ putExtQueueDelete xid p qCfgs
 
 -- struct ofp_packet_queue
 putQueueConfig :: QueueConfig -> Put
-putQueueConfig (QueueConfig qid props) = 
+putQueueConfig (QueueConfig qid props) =
   putWord32be qid <>
   putWord16be (fromIntegral (8 + sum (map lenQueueProp props))) <>
   putWord16be 0 <> -- padding
@@ -1045,7 +1052,7 @@ putQueueConfig (QueueConfig qid props) =
 
 -- struct ofp_queue_prop_min_rate
 putQueueProp :: QueueProperty -> Put
-putQueueProp (MinRateQueue (Enabled rate)) = 
+putQueueProp (MinRateQueue (Enabled rate)) =
   putWord16be 1    <> -- OFPQT_MIN_RATE
   putWord16be 16   <> -- length
   putWord32be 0    <> -- padding
@@ -1067,29 +1074,29 @@ lenQueueProp (MinRateQueue _) = 16
 ------------------------------------------
 
 sendPacketSizeInBytes :: PacketOut -> Int
-sendPacketSizeInBytes (!PacketOutRecord bufferIDData _ actions) = 
-  16 {- 16 == headerSize + 4 + 2 + 2 -} 
+sendPacketSizeInBytes (!PacketOutRecord bufferIDData _ actions) =
+  16 {- 16 == headerSize + 4 + 2 + 2 -}
   + actionSequenceSizeInBytes actions
-  + case bufferIDData of { Left _ -> 0 ; Right xs -> fromIntegral (B.length xs) } 
+  + case bufferIDData of { Left _ -> 0 ; Right xs -> fromIntegral (B.length xs) }
 
 
-putSendPacket_ :: PacketOut -> Put 
-putSendPacket_ (PacketOutRecord {..}) = 
+putSendPacket_ :: PacketOut -> Put
+putSendPacket_ (PacketOutRecord {..}) =
   (putWord32be $ either id (const (-1)) bufferIDData) <>
   putWord16be (maybe ofppNone id packetInPort) <>
   putWord16be (fromIntegral actionArraySize) <>
   (putActions $ actionSequenceToList packetActions) <>
-  (either (const $ return ()) putByteString bufferIDData) 
+  (either (const $ return ()) putByteString bufferIDData)
     where actionArraySize = actionSequenceSizeInBytes packetActions
 
 {-# INLINE putSendPacket #-}
 putSendPacket :: M.TransactionID -> PacketOut -> Put
-putSendPacket xid pkt = 
+putSendPacket xid pkt =
   putHeaderInternal ofptPacketOut (fromIntegral $ sendPacketSizeInBytes pkt) xid <>
   putSendPacket_ pkt
 
 getPacketOut :: Int -> Get PacketOut
-getPacketOut len = do 
+getPacketOut len = do
   bufID'           <- getWord32be
   port'            <- getWord16be
   actionArraySize' <- getWord16be
@@ -1098,22 +1105,22 @@ getPacketOut len = do
                       then let bytesOfData = len - headerSize - 4 - 2 - 2 - fromIntegral actionArraySize'
                            in  getByteString (fromIntegral bytesOfData)
                       else return B.empty
-  return $ PacketOutRecord { bufferIDData = if bufID' == -1 
+  return $ PacketOutRecord { bufferIDData = if bufID' == -1
                                             then Right packetData
                                             else Left bufID'
                            , packetInPort = if port' == ofppNone then Nothing else Just port'
                            , packetActions = ActionSequence (error "unknown size") actions
-                           } 
+                           }
 
 ------------------------------------------
 -- Unparser for flow mod message
 ------------------------------------------
 flowModSizeInBytes' :: ActionSequence -> Int
-flowModSizeInBytes' !actions = 
+flowModSizeInBytes' !actions =
   72 + actionSequenceSizeInBytes actions
-  -- 72 = headerSize + matchSize + 24 
-{-# INLINE flowModSizeInBytes' #-}  
-          
+  -- 72 = headerSize + matchSize + 24
+{-# INLINE flowModSizeInBytes' #-}
+
 data FlowModRecordInternal = FlowModRecordInternal {
       command'       :: !FlowModType
       , match'       :: !Match
@@ -1143,8 +1150,8 @@ data FlowModFlag = SendFlowRemoved | CheckOverlap | Emergency deriving (Show,Eq,
 {-# INLINE putFlowModMain #-}
 putFlowModMain :: M.TransactionID -> FlowMod -> Put
 putFlowModMain !xid !fmod =
-  case fmod of 
-    (DeleteFlows {..}) -> 
+  case fmod of
+    (DeleteFlows {..}) ->
       putHeaderInternal ofptFlowMod (fromIntegral $ flowModSizeInBytes' mempty) xid <>
       putMatch match <>
       putWord64be 0 <>
@@ -1154,7 +1161,7 @@ putFlowModMain !xid !fmod =
       putWord32be (-1) <>
       (putWord16be $ maybe ofppNone fakePort2Code outPort) <>
       putWord16be 0
-         
+
     (DeleteFlowStrict {..}) ->
       putHeaderInternal ofptFlowMod (fromIntegral $ flowModSizeInBytes' mempty) xid <>
       putMatch match <>
@@ -1165,7 +1172,7 @@ putFlowModMain !xid !fmod =
       putWord32be (-1) <>
       (putWord16be $ maybe ofppNone fakePort2Code outPort) <>
       putWord16be 0
-                 
+
     (AddFlow !match !priority !actions !cookie !idleTimeOut !hardTimeOut !notifyWhenRemoved !applyToPacket !overlapAllowed) ->
       putHeaderInternal ofptFlowMod (fromIntegral $ flowModSizeInBytes' actions) xid <>
       putMatch match <>
@@ -1176,11 +1183,11 @@ putFlowModMain !xid !fmod =
       putWord16be priority <>
       (putWord32be $ maybe (-1) id applyToPacket) <>
       putWord16be ofppNone <>
-      (putWord16be $ let overlapFlag = if overlapAllowed then 0 else 2 
+      (putWord16be $ let overlapFlag = if overlapAllowed then 0 else 2
                          removeFlag  = if notifyWhenRemoved then 1 else 0
                      in overlapFlag .|. removeFlag) <>
       (putActions $ actionSequenceToList actions)
-    
+
     (AddEmergencyFlow {..}) ->
       putHeaderInternal ofptFlowMod (fromIntegral $ flowModSizeInBytes' actions) xid <>
       putMatch match <>
@@ -1190,7 +1197,7 @@ putFlowModMain !xid !fmod =
       putWord16be priority <>
       putWord32be (-1) <>
       putWord16be ofppNone <>
-      (putWord16be $ let emergencyFlag = 4 
+      (putWord16be $ let emergencyFlag = 4
                          overlapFlag = if overlapAllowed then 0 else 2
                      in emergencyFlag .|. overlapFlag) <>
       (putActions $ actionSequenceToList actions)
@@ -1205,11 +1212,11 @@ putFlowModMain !xid !fmod =
       putWord16be ifMissingPriority <>
       putWord32be (-1) <>
       putWord16be ofppNone <>
-      (putWord16be $ let overlapFlag = if ifMissingOverlapAllowed then 0 else 2 
+      (putWord16be $ let overlapFlag = if ifMissingOverlapAllowed then 0 else 2
                          removeFlag  = if ifMissingNotifyWhenRemoved then 1 else 0
                      in overlapFlag .|. removeFlag) <>
       (putActions $ actionSequenceToList newActions)
-            
+
     (ModifyFlowStrict {..}) ->
       putHeaderInternal ofptFlowMod (fromIntegral $ flowModSizeInBytes' newActions) xid <>
       putMatch match <>
@@ -1220,7 +1227,7 @@ putFlowModMain !xid !fmod =
       putWord16be priority <>
       putWord32be (-1) <>
       putWord16be ofppNone <>
-      (putWord16be $ let overlapFlag = if ifMissingOverlapAllowed then 0 else 2 
+      (putWord16be $ let overlapFlag = if ifMissingOverlapAllowed then 0 else 2
                          removeFlag  = if ifMissingNotifyWhenRemoved then 1 else 0
                      in overlapFlag .|. removeFlag) <>
       (putActions $ actionSequenceToList newActions)
@@ -1239,8 +1246,8 @@ getBufferID = do w <- getWord32be
                  if w == -1
                    then return Nothing
                    else return (Just w)
-                        
-getOutPort :: Get (Maybe PseudoPort)                        
+
+getOutPort :: Get (Maybe PseudoPort)
 getOutPort = do w <- getWord16be
                 if w == ofppNone
                   then return Nothing
@@ -1248,20 +1255,20 @@ getOutPort = do w <- getWord16be
 
 
 getFlowModInternal :: Int -> Get FlowModRecordInternal
-getFlowModInternal len = 
+getFlowModInternal len =
   do match       <- getMatch
-     cookie      <- getWord64be 
+     cookie      <- getWord64be
      modType     <- getFlowModType
-     idleTimeOut <- getTimeOutFromCode 
-     hardTimeOut <- getTimeOutFromCode 
-     priority    <- getWord16be 
+     idleTimeOut <- getTimeOutFromCode
+     hardTimeOut <- getTimeOutFromCode
+     priority    <- getWord16be
      mBufferID   <- getBufferID
      outPort     <- getOutPort
      flags       <- getFlowModFlags
      let bytesInActionList = len - 72
      actions <- getActionsOfSize (fromIntegral bytesInActionList)
      return $ FlowModRecordInternal { command'     = modType
-                                    , match'       = match 
+                                    , match'       = match
                                     , actions'     = actions
                                     , priority'    = priority
                                     , idleTimeOut' = idleTimeOut
@@ -1270,9 +1277,9 @@ getFlowModInternal len =
                                     , bufferID'    = mBufferID
                                     , outPort'     = outPort
                                     , cookie'      = cookie
-                                    } 
+                                    }
 
-       
+
 getFlowMod :: Int -> Get FlowMod
 getFlowMod len = getFlowModInternal len >>= return . flowModInternal2FlowMod
 
@@ -1281,15 +1288,15 @@ getFlowMod len = getFlowModInternal len >>= return . flowModInternal2FlowMod
 --fromJust2 _ (Just a) = a
 
 fromJust :: Maybe a -> a
-fromJust Nothing = error "MessagesBinary.fromJust"
+fromJust Nothing  = error "MessagesBinary.fromJust"
 fromJust (Just a) = a
 
-flowModInternal2FlowMod :: FlowModRecordInternal -> FlowMod 
-flowModInternal2FlowMod (FlowModRecordInternal {..}) = 
-  case command' of 
+flowModInternal2FlowMod :: FlowModRecordInternal -> FlowMod
+flowModInternal2FlowMod (FlowModRecordInternal {..}) =
+  case command' of
     FlowDeleteType -> DeleteFlows { match = match', outPort = outPort' }
     FlowDeleteStrictType -> DeleteFlowStrict { match = match', outPort = outPort', priority = priority' }
-    FlowAddType -> 
+    FlowAddType ->
       if elem Emergency flags'
       then AddEmergencyFlow { match = match'
                             , priority = priority'
@@ -1315,7 +1322,7 @@ flowModInternal2FlowMod (FlowModRecordInternal {..}) =
                                   , ifMissingHardTimeOut = fromJust hardTimeOut'
                                   , ifMissingOverlapAllowed    = CheckOverlap `elem` flags'
                                   , ifMissingNotifyWhenRemoved = SendFlowRemoved `elem` flags'
-                                  } 
+                                  }
     FlowModifyStrictType -> ModifyFlowStrict { match = match'
                                              , newActions = ActionSequence (error "size unknown") actions'
                                              , priority = priority'
@@ -1324,10 +1331,10 @@ flowModInternal2FlowMod (FlowModRecordInternal {..}) =
                                              , ifMissingHardTimeOut = fromJust hardTimeOut'
                                              , ifMissingOverlapAllowed    = CheckOverlap `elem` flags'
                                              , ifMissingNotifyWhenRemoved = SendFlowRemoved `elem` flags'
-                                             } 
+                                             }
 
 timeOutToCode :: TimeOut -> Word16
-timeOutToCode Permanent = 0
+timeOutToCode Permanent       = 0
 timeOutToCode (ExpireAfter t) = t
 
 getTimeOutFromCode :: Get (Maybe TimeOut)
@@ -1337,10 +1344,10 @@ getTimeOutFromCode = do code <- getWord16be
                           else return (Just (ExpireAfter code))
 
 flowModFlagToBitMaskBijection :: [(FlowModFlag,Word16)]
-flowModFlagToBitMaskBijection = [(SendFlowRemoved, shiftL 1 0), 
-                                 (CheckOverlap,    shiftL 1 1), 
+flowModFlagToBitMaskBijection = [(SendFlowRemoved, shiftL 1 0),
+                                 (CheckOverlap,    shiftL 1 1),
                                  (Emergency,       shiftL 1 2) ]
-                                
+
 bitMap2FlagSet :: Word16 -> [FlowModFlag]
 bitMap2FlagSet w = [ flag | (flag,mask) <- flowModFlagToBitMaskBijection, mask .&. w /= 0 ]
 
@@ -1356,7 +1363,7 @@ ofpfcModify       = 1
 ofpfcModifyStrict = 2
 ofpfcDelete       = 3
 ofpfcDeleteStrict = 4
-  
+
 flowModTypeBimap :: Bimap FlowModType Word16
 flowModTypeBimap =
     Bimap.fromList [
@@ -1372,63 +1379,63 @@ getFlowModType = do code <- getWord16be
                     return (flowModTypeBimap !> code)
 
 flowModTypeToCode :: FlowModType -> Word16
-flowModTypeToCode !FlowAddType = ofpfcAdd
-flowModTypeToCode !FlowModifyType = ofpfcModify
+flowModTypeToCode !FlowAddType          = ofpfcAdd
+flowModTypeToCode !FlowModifyType       = ofpfcModify
 flowModTypeToCode !FlowModifyStrictType = ofpfcModifyStrict
-flowModTypeToCode !FlowDeleteType = ofpfcDelete
+flowModTypeToCode !FlowDeleteType       = ofpfcDelete
 flowModTypeToCode !FlowDeleteStrictType = ofpfcDeleteStrict
 
 putAction :: Action -> Put
-putAction !act = 
-  case act of 
-    (SendOutPort !port) -> 
+putAction !act =
+  case act of
+    (SendOutPort !port) ->
       putWord32be 8 >> -- replaces putWord16be 0 >> putWord16be 8
       putPseudoPort port
-    (SetVlanVID vlanid) -> 
+    (SetVlanVID vlanid) ->
       putWord16be 1 >>
       putWord16be 8 >>
       putWord16be vlanid >>
       putWord16be 0
-    (SetVlanPriority priority) -> 
+    (SetVlanPriority priority) ->
       putWord16be 2 >>
       putWord16be 8 >>
       putWord8 priority >>
       putWord8 0 >>
       putWord8 0 >>
       putWord8 0
-    (StripVlanHeader) -> 
+    (StripVlanHeader) ->
       putWord16be 3 >>
       putWord16be 8 >>
       putWord32be 0
-    (SetEthSrcAddr addr) -> 
+    (SetEthSrcAddr addr) ->
       putWord16be 4 >>
       putWord16be 16 >>
       putEthernetAddress addr >>
       sequence_ (replicate 6 (putWord8 0))
-    (SetEthDstAddr addr) -> 
+    (SetEthDstAddr addr) ->
       putWord16be 5 >>
       putWord16be 16 >>
       putEthernetAddress addr >>
       sequence_ (replicate 6 (putWord8 0))
-    (SetIPSrcAddr addr) -> 
+    (SetIPSrcAddr addr) ->
       putWord16be 6 >>
       putWord16be 8 >>
       putWord32be (ipAddressToWord32 addr)
-    (SetIPDstAddr addr) -> 
+    (SetIPDstAddr addr) ->
       putWord16be 7 >>
       putWord16be 8 >>
       putWord32be (ipAddressToWord32 addr)
-    (SetIPToS tos) -> 
+    (SetIPToS tos) ->
       putWord16be 8 >>
       putWord16be 8 >>
       putWord8 tos >>
       sequence_ (replicate 3 (putWord8 0))
-    (SetTransportSrcPort port) -> 
+    (SetTransportSrcPort port) ->
       putWord16be 9 >>
       putWord16be 8 >>
       putWord16be port >>
       putWord16be 0
-    (SetTransportDstPort port) -> 
+    (SetTransportDstPort port) ->
       putWord16be 10 >>
       putWord16be 8 >>
       putWord16be port >>
@@ -1439,9 +1446,9 @@ putAction !act =
       putWord16be port >>
       sequence_ (replicate 6 (putWord8 0)) >>
       putWord32be qid
-    (VendorAction vendorID bytes) -> 
+    (VendorAction vendorID bytes) ->
       let !l = 2 + 2 + 4 + length bytes
-      in if (l `mod` 8 /= 0) 
+      in if (l `mod` 8 /= 0)
          then error "Vendor action must have enough data to make the action length a multiple of 8 bytes"
          else putWord16be 0xffff >>
               putWord16be (fromIntegral l) >>
@@ -1449,16 +1456,16 @@ putAction !act =
               mapM_ putWord8 bytes
 
 putPseudoPort :: PseudoPort -> Put
-putPseudoPort (PhysicalPort !pid) = 
+putPseudoPort (PhysicalPort !pid) =
  putWord16be pid >>
  putWord16be 0
-putPseudoPort (ToController !maxLen) = 
+putPseudoPort (ToController !maxLen) =
  putWord16be ofppController >>
  putWord16be maxLen
-putPseudoPort !port = 
+putPseudoPort !port =
  putWord16be (fakePort2Code port) >>
  putWord16be 0
-           
+
 actionSizeInBytes :: Action -> Int
 actionSizeInBytes (!SendOutPort _)     = 8
 actionSizeInBytes (!SetVlanVID _)      = 8
@@ -1468,13 +1475,13 @@ actionSizeInBytes (!SetEthSrcAddr _)   = 16
 actionSizeInBytes (!SetEthDstAddr _)   = 16
 actionSizeInBytes (!SetIPSrcAddr _)    = 8
 actionSizeInBytes (!SetIPDstAddr _)    = 8
-actionSizeInBytes (!SetIPToS _)        = 8    
+actionSizeInBytes (!SetIPToS _)        = 8
 actionSizeInBytes (!SetTransportSrcPort _)    = 8
 actionSizeInBytes (!SetTransportDstPort _)    = 8
-actionSizeInBytes (!Enqueue _ _) = 16    
+actionSizeInBytes (!Enqueue _ _) = 16
 actionSizeInBytes (!VendorAction _ bytes) =
-  let l = length bytes + 8 -- + 2 + 2 + 4 
-  in if l `mod` 8 /= 0 
+  let l = length bytes + 8 -- + 2 + 2 + 4
+  in if l `mod` 8 /= 0
      then error "Vendor action must have enough data to make the action length a multiple of 8 bytes"
      else l
 {-# INLINE actionSizeInBytes #-}
@@ -1488,7 +1495,7 @@ portModLength :: Int
 portModLength = 32
 
 putPortMod :: PortMod -> Put
-putPortMod (PortModRecord {..} ) = 
+putPortMod (PortModRecord {..} ) =
  putWord16be portNumber <>
  putEthernetAddress hwAddr <>
  putConfigBitMap <>
@@ -1507,7 +1514,7 @@ putPortMod (PortModRecord {..} ) =
 ----------------------------------------
 -- Stats requests unparser
 ----------------------------------------
-          
+
 statsRequestSize :: StatsRequest -> Int
 statsRequestSize (FlowStatsRequest _ _ _) = headerSize + 2 + 2 + matchSize + 1 + 1 + 2
 statsRequestSize (PortStatsRequest _)     = headerSize + 2 + 2 + 2 + 6
@@ -1515,39 +1522,39 @@ statsRequestSize (DescriptionRequest)     = headerSize + 2 + 2
 statsRequestSize req = error ("Size of " ++ show req ++ " not yet implemented.")
 
 
-putStatsRequestBody :: StatsRequest -> Put 
-putStatsRequestBody (FlowStatsRequest match tableQuery mPort) = 
+putStatsRequestBody :: StatsRequest -> Put
+putStatsRequestBody (FlowStatsRequest match tableQuery mPort) =
     putWord16be ofpstFlow >>
     putWord16be 0 >>
     putMatch match >>
     putWord8 (tableQueryToCode tableQuery) >>
     putWord8 0 >>
     (putWord16be $ maybe ofppNone fakePort2Code mPort)
-putStatsRequestBody (AggregateFlowStatsRequest match tableQuery mPort) = 
+putStatsRequestBody (AggregateFlowStatsRequest match tableQuery mPort) =
   putWord16be ofpstAggregate >>
   putWord16be 0 >>
   putMatch match >>
   putWord8 (tableQueryToCode tableQuery) >>
   putWord8 0 >>
   (putWord16be $ maybe ofppNone fakePort2Code mPort)
-putStatsRequestBody TableStatsRequest = 
-  putWord16be ofpstTable >> 
+putStatsRequestBody TableStatsRequest =
+  putWord16be ofpstTable >>
   putWord16be 0
-putStatsRequestBody DescriptionRequest = 
+putStatsRequestBody DescriptionRequest =
   putWord16be ofpstDesc >>
   putWord16be 0
-putStatsRequestBody (QueueStatsRequest portQuery queueQuery) = 
+putStatsRequestBody (QueueStatsRequest portQuery queueQuery) =
   putWord16be ofpstQueue >>
   putWord16be 0 >>
   putWord16be (queryToPortNumber portQuery) >>
   putWord16be 0 >>
   putWord32be (queryToQueueID queueQuery)
-putStatsRequestBody (PortStatsRequest query) = 
+putStatsRequestBody (PortStatsRequest query) =
  putWord16be ofpstPort >>
  putWord16be 0 >>
  putWord16be (queryToPortNumber query) >>
  sequence_ (replicate 6 (putWord8 0))
-                      
+
 queryToPortNumber :: PortQuery -> Word16
 queryToPortNumber AllPorts       = ofppNone
 queryToPortNumber (SinglePort p) = p
@@ -1579,7 +1586,7 @@ fakePort2Code NormalSwitching       = ofppNormal
 fakePort2Code WithTable             = ofppTable
 
 code2FakePort :: Word16 -> PseudoPort
-code2FakePort w 
+code2FakePort w
   | w <= 0xff00         = PhysicalPort w
   | w == ofppInPort     = InPort
   | w == ofppFlood      = Flood
@@ -1601,7 +1608,7 @@ ofpstAggregate = 2
 ofpstTable     = 3
 ofpstPort      = 4
 ofpstQueue     = 5
--- Not yet used: ofpstVendor    = 0xffff 
+-- Not yet used: ofpstVendor    = 0xffff
 
 
 
@@ -1613,8 +1620,8 @@ matchSize = 40
 
 
 getMatch :: Get Match
-getMatch = do 
-  wcards      <- getWord32be 
+getMatch = do
+  wcards      <- getWord32be
   inport      <- getWord16be
   srcEthAddr  <- getEthernetAddress
   dstEthAddr  <- getEthernetAddress
@@ -1632,15 +1639,15 @@ getMatch = do
   return $ ofpMatch2Match $ OFPMatch wcards inport srcEthAddr dstEthAddr dl_vlan dl_vlan_pcp dl_type nw_tos nw_proto nw_src nw_dst tp_src tp_dst
 
 putMatch :: Match -> Put
-putMatch (Match inPort (MatchHeader {..}) (MatchBody {..})) = 
-     putWord32be wildcards 
+putMatch (Match inPort (MatchHeader {..}) (MatchBody {..})) =
+     putWord32be wildcards
   >> (putWord16be $ maybe 0 id inPort)
   >> (putEthernetAddress $ maybe nullEthAddr id srcEthAddress )
   >> (putEthernetAddress $ maybe nullEthAddr id dstEthAddress )
   >> (putWord16be $ maybe 0 id vLANID )
   >> (putWord8 $ maybe 0 id vLANPriority )
   >> putWord8 0  -- padding
-  >> (putWord16be $ maybe 0 id ethFrameType) 
+  >> (putWord16be $ maybe 0 id ethFrameType)
   >> (putWord8 $ maybe 0 id ipTypeOfService )
   >> (putWord8 $ maybe 0 id matchIPProtocol )
   >> putWord16be 0 -- padding
@@ -1649,8 +1656,8 @@ putMatch (Match inPort (MatchHeader {..}) (MatchBody {..})) =
   >> (putWord16be $ maybe 0 id srcTransportPort )
   >> (putWord16be $ maybe 0 id dstTransportPort )
   where nullEthAddr = ethernetAddress64 0
-        wildcards   = 
-          shiftL (fromIntegral numIgnoredBitsSrc) 8 .|. 
+        wildcards   =
+          shiftL (fromIntegral numIgnoredBitsSrc) 8 .|.
           shiftL (fromIntegral numIgnoredBitsDst) 14 .|.
           (maybe (flip setBit 0) (const id) inPort $
            maybe (flip setBit 1) (const id) vLANID $
@@ -1664,21 +1671,21 @@ putMatch (Match inPort (MatchHeader {..}) (MatchBody {..})) =
            maybe (flip setBit 21) (const id) ipTypeOfService $
            0
           )
-        numIgnoredBitsSrc = 32 - (prefixLength srcIPAddress) 
+        numIgnoredBitsSrc = 32 - (prefixLength srcIPAddress)
         numIgnoredBitsDst = 32 - (prefixLength dstIPAddress)
 
 
 
-data OFPMatch = OFPMatch { ofpm_wildcards           :: !Word32, 
-                           ofpm_in_port             :: !Word16, 
-                           ofpm_dl_src, ofpm_dl_dst :: !EthernetAddress, 
+data OFPMatch = OFPMatch { ofpm_wildcards           :: !Word32,
+                           ofpm_in_port             :: !Word16,
+                           ofpm_dl_src, ofpm_dl_dst :: !EthernetAddress,
                            ofpm_dl_vlan             :: !Word16,
                            ofpm_dl_vlan_pcp         :: !Word8,
                            ofpm_dl_type             :: !Word16,
                            ofpm_nw_tos              :: !Word8,
                            ofpm_nw_proto            :: !Word8,
                            ofpm_nw_src, ofpm_nw_dst :: !Word32,
-                           ofpm_tp_src, ofpm_tp_dst :: !Word16 
+                           ofpm_tp_src, ofpm_tp_dst :: !Word16
                          } deriving (Show,Eq,Generic,NFData)
 
 ofpMatch2Match :: OFPMatch -> Match
