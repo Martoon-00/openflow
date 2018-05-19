@@ -1674,6 +1674,9 @@ putMatch (Match inPort (MatchHeader {..}) (MatchBody {..})) =
         numIgnoredBitsSrc = 32 - (prefixLength srcIPAddress)
         numIgnoredBitsDst = 32 - (prefixLength dstIPAddress)
 
+instance Binary Match where
+    get = getMatch
+    put = putMatch
 
 
 data OFPMatch = OFPMatch { ofpm_wildcards           :: !Word32,
